@@ -1,13 +1,14 @@
+using static SimpleEmoteMenu.Core;
+using System.Linq;
 using Vintagestory.API.Client;
 using Vintagestory.API.Config;
-using static SimpleEmoteMenu.Core;
+using System.Collections.Generic;
 
 namespace SimpleEmoteMenu;
 
 public class GuiDialogSimpleEmoteMenu : GuiDialog
 {
-    protected double ListHeight => (emotes?.Length * 50) ?? 500;
-    protected string[] emotes;
+    protected string[] Emotes { get; private set; }
 
     public GuiDialogSimpleEmoteMenu(ICoreClientAPI capi) : base(capi) { }
 
@@ -15,74 +16,95 @@ public class GuiDialogSimpleEmoteMenu : GuiDialog
 
     public override bool CaptureAllInputs()
     {
-        return true;
+        return IsOpened();
     }
 
-    public override void OnKeyPress(KeyEvent args)
+    public override void OnKeyDown(KeyEvent args)
     {
-        int key = KeyConverter.NewKeysToGlKeys[args.KeyCode];
+        HandleAutoSelectionByKeyPress(args);
+        base.OnKeyDown(args);
+    }
 
-        switch ((GlKeys)key)
+    public static string[] GetTranslatedEmotes(string[] emotes)
+    {
+        return emotes
+        .ToList()
+        .ConvertAll(emote => $"[{GlKeyNames.ToString(IndexesAndGlKeys[emotes.ToList().IndexOf(emote)])}] " + Lang.Get($"{Core.Domain}:emote-{emote}"))
+        .ToArray();
+    }
+
+    public static Dictionary<int, GlKeys> IndexesAndGlKeys { get; } = new()
+    {
+        [-1] = GlKeys.Unknown,
+        [0] = GlKeys.Number1,
+        [1] = GlKeys.Number2,
+        [2] = GlKeys.Number3,
+        [3] = GlKeys.Number4,
+        [4] = GlKeys.Number5,
+        [5] = GlKeys.Number6,
+        [6] = GlKeys.Number7,
+        [7] = GlKeys.Number8,
+        [8] = GlKeys.Number9,
+        [9] = GlKeys.Number0,
+        [10] = GlKeys.A,
+        [11] = GlKeys.B,
+        [12] = GlKeys.C,
+        [13] = GlKeys.D,
+        [14] = GlKeys.E,
+        [15] = GlKeys.F,
+        [16] = GlKeys.G,
+        [17] = GlKeys.H,
+        [18] = GlKeys.I,
+        [19] = GlKeys.J,
+        [20] = GlKeys.K,
+        [21] = GlKeys.L,
+        [22] = GlKeys.M,
+        [23] = GlKeys.N,
+        [24] = GlKeys.O,
+        [25] = GlKeys.P,
+        [26] = GlKeys.Q,
+        [27] = GlKeys.R,
+        [28] = GlKeys.S,
+        [29] = GlKeys.T,
+        [30] = GlKeys.U,
+        [31] = GlKeys.V,
+        [32] = GlKeys.W,
+        [33] = GlKeys.X,
+        [34] = GlKeys.Y,
+        [35] = GlKeys.Z
+    };
+
+    public void HandleAutoSelectionByKeyPress(KeyEvent args)
+    {
+        int index = IndexesAndGlKeys.FirstOrDefault(x => x.Value == (GlKeys)args.KeyCode, IndexesAndGlKeys.First()).Key;
+        if (index != -1 && Emotes.Length > index)
         {
-            case GlKeys.Number1: OnClick(0); break;
-            case GlKeys.Number2: OnClick(1); break;
-            case GlKeys.Number3: OnClick(2); break;
-            case GlKeys.Number4: OnClick(3); break;
-            case GlKeys.Number5: OnClick(4); break;
-            case GlKeys.Number6: OnClick(5); break;
-            case GlKeys.Number7: OnClick(6); break;
-            case GlKeys.Number8: OnClick(7); break;
-            case GlKeys.Number9: OnClick(8); break;
-            case GlKeys.Number0: OnClick(9); break;
+            SelectionChangedDelegate(Emotes[index], true);
         }
-
-        base.OnKeyPress(args);
-    }
-
-    public void AddButton(ElementBounds buttonBounds, out ElementBounds refBounds, int buttonId)
-    {
-        ElementBounds newBounds = ElementBounds.FixedSize(buttonBounds.fixedWidth, buttonBounds.fixedHeight).FixedUnder(buttonBounds, 5).WithAlignment(EnumDialogArea.CenterFixed);
-        int num = buttonId == 9 ? 0 : buttonId + 1;
-        string keyNumber = (num >= 0 && 9 >= num) ? $"[{num}] " : "";
-        SingleComposer = SingleComposer.AddSmallButton(keyNumber + Lang.Get($"{Domain}:emote-{emotes[buttonId]}"), () => OnClick(buttonId), newBounds, key: $"button-{buttonId}");
-        refBounds = newBounds;
-    }
-
-    private bool OnClick(int buttonId)
-    {
-        capi.SendChatMessage($"/emote {emotes[buttonId]}");
-        return TryClose();
     }
 
     private void ComposeDialog()
     {
         ElementBounds dialogBounds = ElementStdBounds.AutosizedMainDialog.WithAlignment(EnumDialogArea.None).WithAlignment(EnumDialogArea.CenterFixed).WithFixedPosition(0, 140);
-        ElementBounds leftColumn = ElementBounds.Fixed(0, 50, 240, ListHeight);
+        ElementBounds leftColumn = ElementBounds.Fixed(0, 50, 240, 0);
 
-        ElementBounds buttonBaseBounds = ElementBounds.Fixed(EnumDialogArea.CenterFixed, leftColumn.fixedX, leftColumn.fixedY - 50, 0, 0);
-        ElementBounds buttonBounds = ElementBounds.Fixed(buttonBaseBounds.fixedX, buttonBaseBounds.fixedY, leftColumn.fixedWidth, 40);
+        ElementBounds buttonBaseBounds = ElementBounds.Fixed(EnumDialogArea.CenterFixed, leftColumn.fixedX, leftColumn.fixedY - 10, leftColumn.fixedWidth, 40);
+        ElementBounds dropdownBounds = ElementBounds.Fixed(buttonBaseBounds.fixedX, buttonBaseBounds.fixedY, leftColumn.fixedWidth, 40);
 
-        ElementBounds bgBounds = ElementBounds.Fill.WithFixedPadding(GuiStyle.ElementToDialogPadding);
-
-        bgBounds.BothSizing = ElementSizing.FitToChildren;
-        bgBounds.WithChildren(leftColumn);
+        dialogBounds.WithChildren(leftColumn);
         SingleComposer = capi.Gui.CreateCompo(Domain, dialogBounds)
-        .AddShadedDialogBG(bgBounds)
-        .AddDialogTitleBar(Lang.Get($"{Domain}:dialog-name"), OnTitleBarCloseClicked);
-
-        ElementBounds prevBounds = buttonBounds;
-        for (int i = 0; i < emotes.Length; i++)
-        {
-            AddButton(prevBounds, out ElementBounds refBounds, i);
-            prevBounds = refBounds;
-        }
-
-        SingleComposer.Compose();
+        .AddDialogTitleBar(Lang.Get($"{Domain}:dialog-name"), () => TryClose())
+        .AddDropDown(Emotes, GetTranslatedEmotes(Emotes), 0, SelectionChangedDelegate, dropdownBounds, "dropdown-emotes")
+        .Compose();
     }
 
-    private void OnTitleBarCloseClicked()
+    private void SelectionChangedDelegate(string code, bool selected)
     {
-        TryClose();
+        if (selected)
+        {
+            capi.SendChatMessage($"/emote {code}");
+            TryClose();
+        }
     }
 
     public override bool TryOpen()
@@ -92,11 +114,12 @@ public class GuiDialogSimpleEmoteMenu : GuiDialog
             return false;
         }
 
-        emotes ??= capi?.World?.Player?.Entity?.Properties?.Attributes?["emotes"]?.AsArray<string>();
+        Emotes ??= capi?.World?.Player?.Entity?.Properties?.Attributes?["emotes"]?.AsArray<string>();
 
-        if (emotes?.Length != 0)
+        if (Emotes?.Length != 0)
         {
             ComposeDialog();
+            SingleComposer.GetDropDown("dropdown-emotes").listMenu.Open();
         }
 
         return true;
